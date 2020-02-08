@@ -1,0 +1,57 @@
+if { [get_cmd_switch --autopilot] } {
+	lappend depot_archives [depot_user]/src/gmock_all_test
+} else {
+	build test/gmock_all_test
+}
+
+create_boot_directory
+
+lappend depot_archives [depot_user]/src/[base_src]
+lappend depot_archives [depot_user]/src/gmock
+lappend depot_archives [depot_user]/src/gtest
+lappend depot_archives [depot_user]/src/init
+lappend depot_archives [depot_user]/src/libc
+lappend depot_archives [depot_user]/src/posix
+lappend depot_archives [depot_user]/src/stdcxx
+lappend depot_archives [depot_user]/src/vfs
+
+import_from_depot $depot_archives
+
+install_config {
+<config>
+	<parent-provides>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="PD"/>
+		<service name="ROM"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+	<default caps="100"/>
+
+	<start name="timer" ram="1M">
+		<provides> <service name="Timer"/> </provides>
+	</start>
+
+	<start name="gmock_all_test" caps="200" ram="6M">
+		<config>
+			<arg value="gmock_all_test"/>
+			<env key="TERM" value="screen"/>
+			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc"/>
+			<vfs>
+				<dir name="dev">
+					<log/>
+					<inline name="rtc">2018-01-01 00:01</inline>
+				</dir>
+				<dir name="tmp"> <ram/> </dir>
+			</vfs>
+		</config>
+	</start>
+</config>}
+
+build_boot_image [build_artifacts]
+
+append qemu_args " -nographic "
+
+run_genode_until {.*child "gmock_all_test" exited with exit value 0} 35

@@ -1,0 +1,53 @@
+build {
+	test/gtest_samples
+}
+
+create_boot_directory
+
+lappend depot_archives [depot_user]/src/[base_src]
+lappend depot_archives [depot_user]/src/gtest
+lappend depot_archives [depot_user]/src/init
+lappend depot_archives [depot_user]/src/libc
+lappend depot_archives [depot_user]/src/posix
+lappend depot_archives [depot_user]/src/stdcxx
+lappend depot_archives [depot_user]/src/vfs
+
+import_from_depot $depot_archives
+
+install_config {
+<config>
+	<parent-provides>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="PD"/>
+		<service name="ROM"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+	<default caps="100"/>
+
+	<start name="timer" ram="1M">
+		<provides> <service name="Timer"/> </provides>
+	</start>
+
+	<start name="gtest_samples" ram="4M">
+		<config>
+			<arg value="gtest_samples"/>
+			<env key="TERM" value="screen"/>
+			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc"/>
+			<vfs>
+				<dir name="dev">
+					<log/>
+					<inline name="rtc">2018-01-01 00:01</inline>
+				</dir>
+			</vfs>
+		</config>
+	</start>
+</config>}
+
+build_boot_image [build_artifacts]
+
+append qemu_args " -nographic "
+
+run_genode_until {.*child "gtest_samples" exited with exit value 0} 10

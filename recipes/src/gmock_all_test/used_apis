@@ -1,0 +1,6 @@
+base
+gmock
+gtest
+libc
+posix
+stdcxx

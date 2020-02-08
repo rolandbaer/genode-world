@@ -1,9 +1,9 @@
 LICENSE   := BSD-3-Clause
-VERSION   := git
-DOWNLOADS := googletest.git
+VERSION   := 1.10.0
+DOWNLOADS := googletest.archive
 
-URL(googletest) := https://github.com/google/googletest.git
-REV(googletest) := 10799abad25aa9ec7dcd08d9a46cad093f8bb074
+URL(googletest) := https://github.com/google/googletest/archive/release-$(VERSION).tar.gz
+SHA(googletest) := 9dc9157a9a1551ec7a7e43daea9a694a0bb5fb8bec81235d8a1e6ef64c716dcb
 DIR(googletest) := src/lib/googletest
 
 DIRS += include/gtest
@@ -12,7 +12,4 @@ DIR_CONTENT(include/gtest) := src/lib/googletest/googletest/include/gtest/**
 DIRS += include/gmock
 DIR_CONTENT(include/gmock) := src/lib/googletest/googlemock/include/gmock/**
 
-PATCHES += src/lib/googletest/gtest-port.h.patch
-
-# quick and dirty solution to enable colored console output
 PATCHES += src/lib/googletest/gtest.patch
