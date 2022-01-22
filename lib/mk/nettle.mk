@@ -99,7 +99,7 @@ SRC_O += $(SRC_ASM:.asm=.o)
 # 	$(COMPILE) -c $*.s
 %.o: %.asm
 	$(MSG_ASSEM)$@ 
-	cd $(NETTLE_DIR); /usr/bin/m4 $(NETTLE_DIR)/m4-utils.m4 $(NETTLE_DIR)/asm.m4 $(REP_DIR)/src/lib/nettle/config.m4 $(REP_DIR)/src/lib/nettle/machine.m4 $< >$(NETTLE_DIR)$*.s
+	cd $(NETTLE_DIR); /usr/bin/m4 $(NETTLE_DIR)/m4-utils.m4 $(NETTLE_DIR)/asm.m4 $(REP_DIR)/src/lib/nettle/config.m4 $(REP_DIR)/src/lib/nettle/machine.m4 $< >$(NETTLE_DIR)/$*.s
 	$(CC) -c $(NETTLE_DIR)/$*.s
 
 vpath %.c $(NETTLE_DIR)
