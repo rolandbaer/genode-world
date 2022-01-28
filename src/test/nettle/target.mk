@@ -1,10 +1,10 @@
-#TARGET   := nettle-benchmark
-TARGET   := random-prime
+TARGET   := nettle-benchmark
+#TARGET   := random-prime
 
 NETTLE_EXAMPLE_DIR := $(call select_from_ports,nettle)/src/lib/nettle/examples
 NETTLE_DIR := $(call select_from_ports,nettle)/src/lib/nettle
 
-LIBS     := posix nettle gmp libc base
+LIBS     := posix stdcxx nettle gmp libc base
 SRC_CC   := nettle-openssl.c nettle-benchmark.c timing.c nettle-internal.c
 #SRC_CC   := io.c random-prime.c
 
