@@ -90,7 +90,9 @@ SRC_C  = aes-decrypt-internal.c aes-decrypt.c \
 		 xts.c xts-aes128.c xts-aes256.c
 
 #modp?
-SRC_ASM = $(notdir $(wildcard $(NETTLE_DIR)/x86_64/*.asm))
+#SRC_ASM = $(notdir $(wildcard $(NETTLE_DIR)/x86_64/*.asm))
+SRC_ASM  = salsa20-2core.asm
+SRC_ASM += gcm-hash8.asm
 
 SRC_O += $(SRC_ASM:.asm=.o)
 
@@ -99,8 +101,8 @@ SRC_O += $(SRC_ASM:.asm=.o)
 # 	$(COMPILE) -c $*.s
 %.o: %.asm
 	$(MSG_ASSEM)$@ 
-	cd $(NETTLE_DIR); /usr/bin/m4 $(NETTLE_DIR)/m4-utils.m4 $(NETTLE_DIR)/asm.m4 $(REP_DIR)/src/lib/nettle/config.m4 $(REP_DIR)/src/lib/nettle/machine.m4 $< >$(NETTLE_DIR)/$*.s
-	$(CC) -c $(NETTLE_DIR)/$*.s
+	cd $(NETTLE_DIR); /usr/bin/m4 $(NETTLE_DIR)/m4-utils.m4 $(NETTLE_DIR)/asm.m4 $(REP_DIR)/src/lib/nettle/config.m4 $(REP_DIR)/src/lib/nettle/machine.m4 $< >$(NETTLE_DIR)/x86_64/$*.s
+	$(CC) -c $(NETTLE_DIR)/x86_64/$*.s
 
 vpath %.c $(NETTLE_DIR)
 vpath %.asm $(NETTLE_DIR)/x86_64
