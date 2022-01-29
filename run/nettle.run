@@ -46,22 +46,11 @@ install_config {
 		<provides> <service name="Timer"/> </provides>
 	</start>
 
-	<start name="ram_fs">
-		<binary name="vfs"/>
-		<resource name="RAM" quantum="4M"/>
-		<provides> <service name="File_system"/> </provides>
-		<config>
-			<vfs> <ram/> </vfs>
-			<policy label="nettle-benchmark -> " root="/" writeable="yes" />
-		</config>
-	</start>
-
 	<start name="nettle-benchmark" caps="150">
 		<resource name="RAM" quantum="16M"/>
 		<config>
 			<vfs>
 				<dir name="dev"> <log/> <inline name="rtc">2018-01-01 00:01</inline> </dir>
-				<fs/>
 			</vfs>
 			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc" />
 		</config>

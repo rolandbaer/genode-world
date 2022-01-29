@@ -11,7 +11,7 @@ SRC_CC   := nettle-openssl.c nettle-benchmark.c timing.c nettle-internal.c
 vpath nettle-openssl.c     $(NETTLE_EXAMPLE_DIR)
 vpath nettle-benchmark.c   $(NETTLE_EXAMPLE_DIR)
 vpath timing.c             $(NETTLE_EXAMPLE_DIR)
-vpath nettle-internal.c             $(NETTLE_DIR)
+vpath nettle-internal.c    $(NETTLE_DIR)
 #vpath io.c             $(NETTLE_EXAMPLE_DIR)
 #vpath random-prime.c             $(NETTLE_EXAMPLE_DIR)
 
