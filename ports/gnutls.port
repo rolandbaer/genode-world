@@ -1,0 +1,12 @@
+LICENSE   := LGPLv2.1
+VERSION   := 3.7.3
+DOWNLOADS := gnutls.archive
+
+URL(gnutls) := https://www.gnupg.org/ftp/gcrypt/gnutls/v3.7/gnutls-$(VERSION).tar.xz
+SHA(gnutls) := fc59c43bc31ab20a6977ff083029277a31935b8355ce387b634fa433f8f6c49a
+DIR(gnutls) := src/lib/gnutls
+
+#PATCHES := src/lib/gnutls/XYZ.patch
+
+#DIRS := include/gnutls
+#DIR_CONTENT(include/gnutls) := src/cfg.h
