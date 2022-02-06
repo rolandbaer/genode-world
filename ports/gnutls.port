@@ -1,12 +1,30 @@
-LICENSE   := LGPLv2.1
-VERSION   := 3.7.3
-DOWNLOADS := gnutls.archive
+LICENSE        := LGPLv2.1
+VERSION_MAJOR  := 3
+VERSION_MINOR  := 7
+VERSION_PATCH  := 3
+NUMBER_VERSION := 0x030703
+VERSION        := $(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_PATCH)
+DOWNLOADS      := gnutls.archive
 
-URL(gnutls) := https://www.gnupg.org/ftp/gcrypt/gnutls/v3.7/gnutls-$(VERSION).tar.xz
+URL(gnutls) := https://www.gnupg.org/ftp/gcrypt/gnutls/v$(VERSION_MAJOR).$(VERSION_MINOR)/gnutls-$(VERSION).tar.xz
 SHA(gnutls) := fc59c43bc31ab20a6977ff083029277a31935b8355ce387b634fa433f8f6c49a
 DIR(gnutls) := src/lib/gnutls
 
 #PATCHES := src/lib/gnutls/XYZ.patch
 
-#DIRS := include/gnutls
-#DIR_CONTENT(include/gnutls) := src/cfg.h
+default: src/lib/gnutls/lib/includes/gnutls/gnutls.h
+
+src/lib/gnutls/lib/includes/gnutls/gnutls.h: src/lib/gnutls/lib/includes/gnutls/gnutls.h.in
+	@$(MSG_GENERATE)$(notdir $@)
+	$(VERBOSE)sed -e 's/@MAJOR_VERSION@/$(VERSION_MAJOR)/' \
+		-e 's/@MINOR_VERSION@/$(VERSION_MINOR)/' \
+		-e 's/@PATCH_VERSION@/$(VERSION_PATCH)/' \
+		-e 's/@VERSION@/$(VERSION)/' \
+		-e 's/@NUMBER_VERSION@/$(NUMBER_VERSION)/' \
+		-e 's/@DEFINE_IOVEC_T@/#include <sys\/uio.h>\ntypedef struct iovec giovec_t;/' \
+		$< > $@
+
+src/lib/gnutls/lib/includes/gnutls/gnutls.h.in: $(DOWNLOADS)
+
+DIRS := include/gnutls
+DIR_CONTENT(include/gnutls) := src/lib/gnutls/lib/includes/
