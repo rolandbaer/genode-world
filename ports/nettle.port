@@ -10,3 +10,4 @@ PATCHES := src/lib/nettle/timing.patch
 
 DIRS := include/nettle
 DIR_CONTENT(include/nettle) := src/lib/nettle/nettle-meta.h
+DIR_CONTENT(include/nettle) := src/lib/nettle/memxor.h
