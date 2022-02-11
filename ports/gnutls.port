@@ -12,7 +12,13 @@ DIR(gnutls) := src/lib/gnutls
 
 #PATCHES := src/lib/gnutls/XYZ.patch
 
-default: src/lib/gnutls/lib/includes/gnutls/gnutls.h
+gen_files := src/lib/gnutls/lib/includes/gnutls/gnutls.h \
+             src/lib/gnutls/src/gl/byteswap.h \
+             src/lib/gnutls/gl/byteswap.h \
+             src/lib/gnutls/src/gl/alloca.h \
+             src/lib/gnutls/gl/alloca.h
+
+default: $(gen_files)
 
 src/lib/gnutls/lib/includes/gnutls/gnutls.h: src/lib/gnutls/lib/includes/gnutls/gnutls.h.in
 	@$(MSG_GENERATE)$(notdir $@)
@@ -24,7 +30,31 @@ src/lib/gnutls/lib/includes/gnutls/gnutls.h: src/lib/gnutls/lib/includes/gnutls/
 		-e 's/@DEFINE_IOVEC_T@/#include <sys\/uio.h>\ntypedef struct iovec giovec_t;/' \
 		$< > $@
 
+src/lib/gnutls/src/gl/byteswap.h: src/lib/gnutls/src/gl/byteswap.in.h
+	@$(MSG_GENERATE)$(notdir $@)
+	$(VERBOSE)sed -e 's/\/* DO NOT EDIT! GENERATED AUTOMATICALLY! *\///' \
+		$< > $@
+
+src/lib/gnutls/gl/byteswap.h: src/lib/gnutls/gl/byteswap.in.h
+	@$(MSG_GENERATE)$(notdir $@)
+	$(VERBOSE)sed -e 's/\/* DO NOT EDIT! GENERATED AUTOMATICALLY! *\///' \
+		$< > $@
+
+src/lib/gnutls/src/gl/alloca.h: src/lib/gnutls/src/gl/alloca.in.h
+	@$(MSG_GENERATE)$(notdir $@)
+	$(VERBOSE)sed -e 's/\/* DO NOT EDIT! GENERATED AUTOMATICALLY! *\///' \
+		-e 's/@HAVE_ALLOCA_H@/1/' \
+		$< > $@
+
+src/lib/gnutls/gl/alloca.h: src/lib/gnutls/gl/alloca.in.h
+	@$(MSG_GENERATE)$(notdir $@)
+	$(VERBOSE)sed -e 's/\/* DO NOT EDIT! GENERATED AUTOMATICALLY! *\///' \
+		-e 's/@HAVE_ALLOCA_H@/1/' \
+		$< > $@
+
 src/lib/gnutls/lib/includes/gnutls/gnutls.h.in: $(DOWNLOADS)
+src/lib/gnutls/src/gl/byteswap.in.h: $(DOWNLOADS)
+src/lib/gnutls/gl/byteswap.in.h: $(DOWNLOADS)
 
 DIRS := include/gnutls
 DIR_CONTENT(include/gnutls) := src/lib/gnutls/lib/includes/
