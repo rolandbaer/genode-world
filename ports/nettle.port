@@ -9,5 +9,13 @@ DIR(nettle) := src/lib/nettle
 PATCHES := src/lib/nettle/timing.patch
 
 DIRS := include/nettle
-DIR_CONTENT(include/nettle) := src/lib/nettle/nettle-meta.h
-DIR_CONTENT(include/nettle) := src/lib/nettle/memxor.h
+DIR_CONTENT(include/nettle) := src/lib/nettle/nettle-meta.h \
+                               src/lib/nettle/memxor.h \
+                               src/lib/nettle/sha3.h \
+                               src/lib/nettle/nettle-types.h \
+                               src/lib/nettle/cmac.h \
+                               src/lib/nettle/aes.h \
+                               src/lib/nettle/des.h \
+                               src/lib/nettle/ctr.h \
+                               src/lib/nettle/macros.h \
+                               src/lib/nettle/memops.h
