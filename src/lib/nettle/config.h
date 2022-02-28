@@ -66,17 +66,17 @@
 /* #undef HAVE_NATIVE_fat_chacha_2core */
 /* #undef HAVE_NATIVE_fat_chacha_3core */
 /* #undef HAVE_NATIVE_fat_chacha_4core */
-#define HAVE_NATIVE_ecc_curve25519_modp 1
-#define HAVE_NATIVE_ecc_curve448_modp 1
-#define HAVE_NATIVE_ecc_secp192r1_modp 1
+//#define HAVE_NATIVE_ecc_curve25519_modp 1
+//#define HAVE_NATIVE_ecc_curve448_modp 1
+//#define HAVE_NATIVE_ecc_secp192r1_modp 1
 /* #undef HAVE_NATIVE_ecc_secp192r1_redc */
-#define HAVE_NATIVE_ecc_secp224r1_modp 1
+//#define HAVE_NATIVE_ecc_secp224r1_modp 1
 /* #undef HAVE_NATIVE_ecc_secp224r1_redc */
 /* #undef HAVE_NATIVE_ecc_secp256r1_modp */
-#define HAVE_NATIVE_ecc_secp256r1_redc 1
-#define HAVE_NATIVE_ecc_secp384r1_modp 1
+//#define HAVE_NATIVE_ecc_secp256r1_redc 1
+//#define HAVE_NATIVE_ecc_secp384r1_modp 1
 /* #undef HAVE_NATIVE_ecc_secp384r1_redc */
-#define HAVE_NATIVE_ecc_secp521r1_modp 1
+//#define HAVE_NATIVE_ecc_secp521r1_modp 1
 /* #undef HAVE_NATIVE_ecc_secp521r1_redc */
 /* #undef HAVE_NATIVE_gcm_init_key */
 /* #undef HAVE_NATIVE_fat_gcm_init_key */
@@ -129,6 +129,8 @@
 /* Define to 1 if you have the <valgrind/memcheck.h> header file. */
 /* #undef HAVE_VALGRIND_MEMCHECK_H */
 
+//#define NETTLE_USE_MINI_GMP 1
+
 /* Define to the address where bug reports for this package should be sent. */
 #define PACKAGE_BUGREPORT "nettle-bugs@lists.lysator.liu.se"
 
@@ -168,7 +170,7 @@
 #define TIME_WITH_SYS_TIME 1
 
 /* Defined if public key features are enabled */
-#define WITH_HOGWEED 1
+//#define WITH_HOGWEED 1
 
 /* Define if you have openssl's libcrypto (used for benchmarking) */
 /* #undef WITH_OPENSSL */

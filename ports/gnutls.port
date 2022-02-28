@@ -16,6 +16,8 @@ gen_files := src/lib/gnutls/lib/includes/gnutls/gnutls.h \
              src/lib/gnutls/gl/byteswap.h \
              src/lib/gnutls/src/gl/alloca.h \
              src/lib/gnutls/gl/alloca.h \
+			 src/lib/gnutls/lib/unistring/unictype.h \
+			 src/lib/gnutls/lib/unistring/uninorm.h \
 			 src/lib/gnutls/lib/unistring/unistr.h \
 			 src/lib/gnutls/lib/unistring/unitypes.h
 #             src/lib/gnutls/src/gl/byteswap.h \
@@ -55,6 +57,16 @@ src/lib/gnutls/gl/alloca.h: src/lib/gnutls/gl/alloca.in.h
 		-e 's/@HAVE_ALLOCA_H@/1/' \
 		$< > $@
 
+src/lib/gnutls/lib/unistring/unictype.h: src/lib/gnutls/lib/unistring/unictype.in.h
+	@$(MSG_GENERATE)$(notdir $@)
+	$(VERBOSE)sed -e '1i /* DO NOT EDIT! GENERATED AUTOMATICALLY! */' \
+		$< > $@
+
+src/lib/gnutls/lib/unistring/uninorm.h: src/lib/gnutls/lib/unistring/uninorm.in.h
+	@$(MSG_GENERATE)$(notdir $@)
+	$(VERBOSE)sed -e '1i /* DO NOT EDIT! GENERATED AUTOMATICALLY! */' \
+		$< > $@
+
 src/lib/gnutls/lib/unistring/unistr.h: src/lib/gnutls/lib/unistring/unistr.in.h
 	@$(MSG_GENERATE)$(notdir $@)
 	$(VERBOSE)sed -e '1i /* DO NOT EDIT! GENERATED AUTOMATICALLY! */' \
@@ -70,4 +82,5 @@ src/lib/gnutls/src/gl/byteswap.in.h: $(DOWNLOADS)
 src/lib/gnutls/gl/byteswap.in.h: $(DOWNLOADS)
 
 DIRS := include/gnutls
-DIR_CONTENT(include/gnutls) := src/lib/gnutls/lib/includes/
+DIR_CONTENT(include/gnutls) := \
+	src/lib/gnutls/lib/includes/
