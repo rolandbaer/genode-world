@@ -4,6 +4,11 @@
 # \date   2021-12-29
 #
 
+set host_tool [installed_command host]
+#set ntp_ip    [exec $host_tool -t A pool.ntp.org | head -1 | cut -d " " -f 4]
+set ntp_ip    [exec $host_tool -t A ptbtime1.ptb.de | head -1 | cut -d " " -f 4]
+puts "Using NTP server $ntp_ip"
+
 create_boot_directory
 
 set packages "
@@ -11,16 +16,30 @@ set packages "
 	[depot_user]/pkg/[drivers_nic_pkg]
 	[depot_user]/src/gmp
 	[depot_user]/src/init
-	[depot_user]/src/libc
+	[depot_user]/src/nic_router
 	[depot_user]/src/posix
 	[depot_user]/src/vfs
-	[depot_user]/src/nic_router
+	[depot_user]/src/vfs_pipe
+	[depot_user]/src/vfs_jitterentropy
 "
+
+# [depot_user]/src/libc
+
 append packages " [depot_user]/src/vfs_lxip          "
+
+proc rtc_drv { } {
+        switch [board] {
+                linux   { return "linux_rtc_drv" }
+                pc      { return "rtc_drv" }
+                default { return "dummy_rtc_drv" }
+        }
+}
+
+append packages [depot_user]/src/[rtc_drv]
 
 import_from_depot $packages
 
-build { app/chrony }
+build { test/libc app/chrony }
 
 #
 # Generate config
@@ -64,6 +83,12 @@ set config {
 			<any-service> <parent/> </any-service>
 		</route>
 	</start> }
+append config {
+    <start name="rtc_drv" ld="} [expr [have_board linux] ? "no" : "yes"] {">
+        <resource name="RAM" quantum="1M"/>
+        <binary name="} [rtc_drv] {"/>
+        <provides> <service name="Rtc"/> </provides>
+    </start> }
 
 append config {
 	<start name="nic_router" caps="120">
@@ -72,7 +97,7 @@ append config {
 			<service name="Nic"/>
 			<service name="Uplink"/>
 		</provides>
-		<config verbose_domain_state="yes"> 
+		<config verbose="yes" verbose_domain_state="yes" verbose_packets="yes"> 
 			<policy label_prefix="chrony_daemon" domain="server"/> 
 			<policy label_prefix="nic_drv"          domain="uplink"/>
 			<domain name="uplink" }
@@ -80,37 +105,75 @@ append_if [have_spec linux] config "
 			        interface=\"$lx_ip_addr/24\" gateway=\"10.0.2.1\""
 append config {
 			>
-				<nat domain="server" tcp-ports="100" />
+				<nat domain="server"
+				     tcp-ports="16384"
+				     udp-ports="16384"
+				     icmp-ids="16384"/>
+					 <!--				<nat domain="server" tcp-ports="100" />
 				<tcp-forward port="5001" domain="server" to="10.0.3.2" />
-				<tcp-forward port="12865" domain="server" to="10.0.3.2" />
+				<tcp-forward port="12865" domain="server" to="10.0.3.2" /> -->
 			</domain>
-			<domain name="server" interface="10.0.3.1/24" verbose_packets="no">
+			<domain name="server" interface="10.0.3.1/24" verbose_packets="yes">
+				<tcp dst="0.0.0.0/0"><permit-any domain="uplink" /></tcp>
+				<udp dst="0.0.0.0/0"><permit-any domain="uplink" /></udp>
 				<dhcp-server ip_first="10.0.3.2"
 				             ip_last="10.0.3.2"
-				             ip_lease_time_sec="600"/>
+				             ip_lease_time_sec="600"
+							 dns_config_from="uplink"/>
 			</domain>
 		</config>
 	</start> }
 
 append config {
 	<start name="chrony_daemon" caps="320" priority="-1">
-	<binary name="chronyd"/>
+		<binary name="chronyd"/>
 		<resource name="RAM" quantum="64M"/>
-		<config>
-			<arg value="iperf"/>
-			<arg value="-s"/>
-			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc" socket="/socket"/>
+		<config verbose="yes">
+			<env key="GNUTLS_DEBUG_LEVEL" value="10" />
+			<arg value="chronyd"/>
+			<arg value="-d"/>
+			<arg value="-4"/>
+			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc" socket="/socket" pipe="/pipe" rng="/dev/random" />
 			<vfs>
 				<dir name="dev">
-					<log/> <inline name="rtc">2020-01-01 00:01</inline>
+					<log/>
+					<!--<inline name="rtc">2022-01-01 00:01</inline>-->
+					<jitterentropy name="random"/>
+                    <jitterentropy name="urandom"/>
+					<rtc/>
 				</dir>
 				<dir name="socket">
 					<lxip dhcp="yes"/>
+				</dir>
+				<dir name="pipe"> <pipe/> </dir>
+				<dir name="etc">
+					<inline name="chrony.conf">
+server } $ntp_ip { nts
+# ... ptbtime1.ptb.de nts
+makestep 1.0 3
+rtcsync
+driftfile /var/run/chrony/drift
+logdir /var/log
+log tracking
+</inline>
+				</dir>
+				<dir name="var">
+					<dir name="run">
+						<dir name="chrony">
+							<inline name="chronyd.pid" />
+							<inline name="chronyd.sock" />
+							<inline name="drift" />
+						</dir>
+					</dir>
+					<dir name="log">
+						<inline name="tracking.log" />
+					</dir>
 				</dir>
 			</vfs>
 		</config>
 		<route>
 			<service name="Nic"> <child name="nic_router"/> </service>
+			<service name="Rtc"> <child name="rtc_drv"/> </service>
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
@@ -119,7 +182,7 @@ append config {
 
 install_config $config
 
-build_boot_image { chronyd stdcxx.lib.so gmp.lib.so nettle.lib.so gnutls.lib.so}
+build_boot_image { chronyd stdcxx.lib.so gmp.lib.so nettle.lib.so gnutls.lib.so libc.lib.so libm.lib.so}
 
 #
 # Execute test case
@@ -152,4 +215,4 @@ if {[have_include "power_on/qemu"]} {
 # give the TCP/IP stack some time to settle down
 sleep 3
 
-run_genode_until "aaaa.*aaaa" 120 $spawn_id_list
+run_genode_until "aaaa.*aaaa" 600 $spawn_id_list

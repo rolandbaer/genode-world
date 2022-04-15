@@ -31,8 +31,8 @@
 #define HAVE_SIV 1
 #define FEAT_NTS 1
 //#define PRIVOPS_ADJUSTTIME 1
-//#define PRIVOPS_ADJUSTTIMEX 1
-#define PRIVOPS_HELPER 1
+//S#define PRIVOPS_ADJUSTTIMEX 1
+//#define PRIVOPS_HELPER 1
 #define DEFAULT_CONF_FILE "/etc/chrony.conf"
 #define DEFAULT_HWCLOCK_FILE ""
 #define DEFAULT_PID_FILE "/var/run/chrony/chronyd.pid"
