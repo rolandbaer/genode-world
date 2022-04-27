@@ -25,6 +25,8 @@
 /* C99 macros are supported */
 #define C99_MACROS 1
 
+#define DEBUG 1
+
 /* Define to 1 if using 'alloca.c'. */
 /* #undef C_ALLOCA */
 

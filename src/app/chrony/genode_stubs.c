@@ -1,5 +1,5 @@
 /*
- * \brief  OS specific implementations for used by chrony
+ * \brief  OS specific implementations used by chrony
  * \author Roland Bär
  */
 
