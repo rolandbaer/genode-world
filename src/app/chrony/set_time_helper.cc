@@ -1,3 +1,9 @@
+/*
+ * \brief  helper implementation for set time
+ * \author Roland Bär
+ * \date   2022-06-06
+ */
+
 #include <base/env.h>
 #include <libc/args.h>
 #include <libc/component.h>
@@ -8,25 +14,25 @@
 
 set_time_helper::set_time_helper()
 {
-    Genode::log("set_time_helper::ctor");
+	Genode::log("set_time_helper::ctor");
 }
+
 
 set_time_helper::~set_time_helper()
 {
 }
 
+
 void set_time_helper::init(Libc::Env &env)
 {
-    _set_time_reporter.construct(env, "set_rtc");
-    _set_time_reporter->enabled(true);
+	_set_time_reporter.construct(env, "set_rtc");
+	_set_time_reporter->enabled(true);
 }
+
 
 void set_time_helper::set_time(time_t &time)
 {
-    Genode::log("set_time_helper::set_time");
-    Rtc::Timestamp _ts { };
-
-    Genode::log("time:", time);
+	Rtc::Timestamp _ts { };
 
 	struct tm *utc = gmtime(&time);
 	if (utc) {
@@ -36,26 +42,26 @@ void set_time_helper::set_time(time_t &time)
 		_ts.day    = utc->tm_mday;
 		_ts.month  = utc->tm_mon + 1;
 		_ts.year   = utc->tm_year + 1900;
+	} else {
+		Genode::error("time is not in UTC!");
 	}
-    else
-    {
-        Genode::error("not utc !!!!!");
-    }
 
-    _set_rtc(*_set_time_reporter, _ts);
+	_set_rtc(*_set_time_reporter, _ts);
 }
+
 
 set_time_helper* set_time_callback_function(set_time_helper* set_time_helper, time_t time)
 {
-  printf("set_time_callback_function, time: %ld", time);
-  set_time_helper->set_time(time);
-  return set_time_helper;
+	set_time_helper->set_time(time);
+	return set_time_helper;
 }
+
 
 /*
  * 'main' will be called by component initialization
  */
 extern "C" int main(int argc, char *argv[]);
+
 
 static void construct_component(Libc::Env &env)
 {
@@ -65,15 +71,15 @@ static void construct_component(Libc::Env &env)
 
 	populate_args_and_env(env, argc, argv, envp);
 
-	// environ = envp;
-
 	exit(main(argc, argv));
 }
+
 
 void Libc::Component::construct(Libc::Env &env)
 {
 	_set_time_helper.init(env);
 	Libc::with_libc([&] () { construct_component(env); });
 }
+
 
 set_time_helper _set_time_helper;
