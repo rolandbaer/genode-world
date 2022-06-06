@@ -14,6 +14,7 @@
 #include "logging.h"
 #include "sched.h"
 #include "util.h"
+#include "set_time_helper.h"
 
 /* Maximum frequency offset accepted by the kernel (in ppm) */
 #define MAX_FREQ 500.0
@@ -63,6 +64,20 @@ static double slew_freq;
 /* Time (raw) of last update of slewing frequency and offset */
 static struct timespec slew_start;
 
+/* Maximum expected offset correction error caused by delayed change in the
+   real frequency of the clock */
+static double slew_error;
+
+/* Limits for the slew timeout */
+#define MIN_SLEW_TIMEOUT 1.0
+#define MAX_SLEW_TIMEOUT 1.0e4
+
+/* Scheduler timeout ID for ending of the currently running slew */
+static SCH_TimeoutID slew_timeout_id;
+
+/* Suggested offset correction rate (correction time * offset) */
+static double correction_rate;
+
 /* Minimum offset that the system driver can slew faster than the maximum
    frequency offset that it allows to be set directly */
 static double fastslew_min_offset;
@@ -77,25 +92,28 @@ static int fastslew_active;
 
 /* Positive offset means system clock is fast of true time, therefore
    slew backwards */
-
 static void
 accrue_offset(double offset, double corr_rate)
 {
-//   struct timeval newadj, oldadj;
-//   double doldadj;
+  LOG(LOGS_INFO, "genode_stub --> accrue_offset");
+  struct timeval newadj, oldadj;
+  double doldadj;
 
-//   UTI_DoubleToTimeval(-offset, &newadj);
+  UTI_DoubleToTimeval(-offset, &newadj);
 
-//   if (PRV_AdjustTime(&newadj, &oldadj) < 0)
-//     LOG_FATAL("adjtime() failed");
+  LOG(LOGS_INFO, "offset: %f, time: %ld", offset, newadj.tv_sec);
 
-//   /* Add the old remaining adjustment if not zero */
-//   doldadj = UTI_TimevalToDouble(&oldadj);
-//   if (doldadj != 0.0) {
-//     UTI_DoubleToTimeval(-offset + doldadj, &newadj);
-//     if (PRV_AdjustTime(&newadj, NULL) < 0)
-//       LOG_FATAL("adjtime() failed");
-//   }
+  if (adjtime(&newadj, &oldadj) < 0)
+    LOG_FATAL("adjtime() failed");
+
+  /* Add the old remaining adjustment if not zero */
+  doldadj = UTI_TimevalToDouble(&oldadj);
+  if (doldadj != 0.0) {
+    LOG(LOGS_INFO, "genode_stub --> accrue_offset 2nd run");
+    UTI_DoubleToTimeval(-offset + doldadj, &newadj);
+    if (adjtime(&newadj, NULL) < 0)
+      LOG_FATAL("adjtime() failed");
+  }
 }
 
 /* ================================================== */
@@ -104,21 +122,22 @@ static void
 get_offset_correction(struct timespec *raw,
                       double *corr, double *err)
 {
-//   struct timeval remadj;
-//   double adjustment_remaining;
+  LOG(LOGS_INFO, "genode_stub --> get_offset_correction");
+  struct timeval remadj;
+  double adjustment_remaining;
 
-//   if (PRV_AdjustTime(NULL, &remadj) < 0)
-//     LOG_FATAL("adjtime() failed");
+  if (adjtime(NULL, &remadj) < 0)
+    LOG_FATAL("adjtime() failed");
 
-//   adjustment_remaining = UTI_TimevalToDouble(&remadj);
+  adjustment_remaining = UTI_TimevalToDouble(&remadj);
 
-//   *corr = adjustment_remaining;
-//   if (err) {
-//     if (*corr != 0.0)
-//       *err = 1.0e-6 * MAX_ADJTIME_SLEWRATE / ADJTIME_UPDATE_INTERVAL;
-//     else
-//       *err = 0.0;
-//   }
+  *corr = adjustment_remaining;
+  if (err) {
+    if (*corr != 0.0)
+      *err = 1.0e-6 * MAX_ADJTIME_SLEWRATE / ADJTIME_UPDATE_INTERVAL;
+    else
+      *err = 0.0;
+  }
 }
 
 static void handle_end_of_slew(void *anything);
@@ -131,6 +150,7 @@ static void
 handle_step(struct timespec *raw, struct timespec *cooked, double dfreq,
             double doffset, LCL_ChangeType change_type, void *anything)
 {
+  LOG(LOGS_INFO, "genode_stub --> handle_step");
   if (change_type == LCL_ChangeUnknownStep) {
     /* Reset offset and slewing */
     slew_start = *raw;
@@ -147,7 +167,8 @@ handle_step(struct timespec *raw, struct timespec *cooked, double dfreq,
 static int
 apply_step_offset(double offset)
 {
-/*  struct timespec old_time, new_time;
+  LOG(LOGS_INFO, "genode_stub --> apply_step_offset");
+  struct timespec old_time, new_time;
   struct timeval new_time_tv;
   double err;
 
@@ -155,7 +176,7 @@ apply_step_offset(double offset)
   UTI_AddDoubleToTimespec(&old_time, -offset, &new_time);
   UTI_TimespecToTimeval(&new_time, &new_time_tv);
 
-  if (PRV_SetTime(&new_time_tv, NULL) < 0) {
+  if (settimeofday(&new_time_tv, NULL) < 0) {
     DEBUG_LOG("settimeofday() failed");
     return 0;
   }
@@ -164,14 +185,62 @@ apply_step_offset(double offset)
   err = UTI_DiffTimespecsToDouble(&old_time, &new_time);
 
   lcl_InvokeDispersionNotifyHandlers(fabs(err));
-*/
+
   return 1;
 }
 
 static double
 read_frequency(void)
 {
+  LOG(LOGS_INFO, "genode_stub --> read_frequency");
   return base_freq;
+}
+
+/* ================================================== */
+
+static void
+start_fastslew(void)
+{
+  LOG(LOGS_INFO, "genode_stub --> start_fastslew");
+  if (!drv_accrue_offset)
+    return;
+
+  drv_accrue_offset(offset_register, 0.0);
+
+  DEBUG_LOG("fastslew offset=%e", offset_register);
+
+  offset_register = 0.0;
+  fastslew_active = 1;
+}
+
+/* ================================================== */
+
+static void
+stop_fastslew(struct timespec *now)
+{
+  LOG(LOGS_INFO, "genode_stub --> stop_fastslew");
+  double corr;
+
+  if (!drv_get_offset_correction || !fastslew_active)
+    return;
+
+  /* Cancel the remaining offset */
+  drv_get_offset_correction(now, &corr, NULL);
+  drv_accrue_offset(corr, 0.0);
+  offset_register -= corr;
+}
+
+/* ================================================== */
+
+static double
+clamp_freq(double freq)
+{
+  LOG(LOGS_INFO, "genode_stub --> clamp_freq");
+  if (freq > max_freq)
+    return max_freq;
+  if (freq < -max_freq)
+    return -max_freq;
+  return freq;
 }
 
 /* ================================================== */
@@ -180,86 +249,96 @@ read_frequency(void)
 static void
 update_slew(void)
 {
+  LOG(LOGS_INFO, "genode_stub --> update_slew");
   struct timespec now, end_of_slew;
   double old_slew_freq, total_freq, corr_freq, duration;
 
-  // /* Remove currently running timeout */
-  // SCH_RemoveTimeout(slew_timeout_id);
+  /* Remove currently running timeout */
+  SCH_RemoveTimeout(slew_timeout_id);
 
-  // LCL_ReadRawTime(&now);
+  LCL_ReadRawTime(&now);
 
-  // /* Adjust the offset register by achieved slew */
-  // duration = UTI_DiffTimespecsToDouble(&now, &slew_start);
-  // offset_register -= slew_freq * duration;
+  /* Adjust the offset register by achieved slew */
+  duration = UTI_DiffTimespecsToDouble(&now, &slew_start);
+  offset_register -= slew_freq * duration;
 
-  // stop_fastslew(&now);
+  stop_fastslew(&now);
 
-  // /* Estimate how long should the next slew take */
-  // if (fabs(offset_register) < MIN_OFFSET_CORRECTION) {
-  //   duration = MAX_SLEW_TIMEOUT;
-  // } else {
-  //   duration = correction_rate / fabs(offset_register);
-  //   if (duration < MIN_SLEW_TIMEOUT)
-  //     duration = MIN_SLEW_TIMEOUT;
-  // }
+  /* Estimate how long should the next slew take */
+  if (fabs(offset_register) < MIN_OFFSET_CORRECTION) {
+    duration = MAX_SLEW_TIMEOUT;
+  } else {
+    duration = correction_rate / fabs(offset_register);
+    if (duration < MIN_SLEW_TIMEOUT)
+      duration = MIN_SLEW_TIMEOUT;
+  }
 
-  // /* Get frequency offset needed to slew the offset in the duration
-  //    and clamp it to the allowed maximum */
-  // corr_freq = offset_register / duration;
-  // if (corr_freq < -max_corr_freq)
-  //   corr_freq = -max_corr_freq;
-  // else if (corr_freq > max_corr_freq)
-  //   corr_freq = max_corr_freq;
+  /* Get frequency offset needed to slew the offset in the duration
+     and clamp it to the allowed maximum */
+  corr_freq = offset_register / duration;
+  if (corr_freq < -max_corr_freq)
+    corr_freq = -max_corr_freq;
+  else if (corr_freq > max_corr_freq)
+    corr_freq = max_corr_freq;
 
-  // /* Let the system driver perform the slew if the requested frequency
-  //    offset is too large for the frequency driver */
-  // if (drv_accrue_offset && fabs(corr_freq) >= fastslew_max_rate &&
-  //     fabs(offset_register) > fastslew_min_offset) {
-  //   start_fastslew();
-  //   corr_freq = 0.0;
-  // }
+  /* Let the system driver perform the slew if the requested frequency
+     offset is too large for the frequency driver */
+  if (drv_accrue_offset && fabs(corr_freq) >= fastslew_max_rate &&
+      fabs(offset_register) > fastslew_min_offset) {
+    start_fastslew();
+    corr_freq = 0.0;
+  }
 
-  // /* Get the new real frequency and clamp it */
-  // total_freq = clamp_freq(base_freq + corr_freq * (1.0e6 - base_freq));
+  /* Get the new real frequency and clamp it */
+  total_freq = clamp_freq(base_freq + corr_freq * (1.0e6 - base_freq));
 
-  // /* Set the new frequency (the actual frequency returned by the call may be
-  //    slightly different from the requested frequency due to rounding) */
-  // total_freq = (*drv_set_freq)(total_freq);
+  /* Set the new frequency (the actual frequency returned by the call may be
+     slightly different from the requested frequency due to rounding) */
+  total_freq = (*drv_set_freq)(total_freq);
 
-  // /* Compute the new slewing frequency, it's relative to the real frequency to
-  //    make the calculation in offset_convert() cheaper */
-  // old_slew_freq = slew_freq;
-  // slew_freq = (total_freq - base_freq) / (1.0e6 - total_freq);
+  /* Compute the new slewing frequency, it's relative to the real frequency to
+     make the calculation in offset_convert() cheaper */
+  old_slew_freq = slew_freq;
+  slew_freq = (total_freq - base_freq) / (1.0e6 - total_freq);
 
-  // /* Compute the dispersion introduced by changing frequency and add it
-  //    to all statistics held at higher levels in the system */
-  // slew_error = fabs((old_slew_freq - slew_freq) * max_freq_change_delay);
-  // if (slew_error >= MIN_OFFSET_CORRECTION)
-  //   lcl_InvokeDispersionNotifyHandlers(slew_error);
+  /* Compute the dispersion introduced by changing frequency and add it
+     to all statistics held at higher levels in the system */
+  slew_error = fabs((old_slew_freq - slew_freq) * max_freq_change_delay);
+  if (slew_error >= MIN_OFFSET_CORRECTION)
+    lcl_InvokeDispersionNotifyHandlers(slew_error);
 
-  // /* Compute the duration of the slew and clamp it.  If the slewing frequency
-  //    is zero or has wrong sign (e.g. due to rounding in the frequency driver or
-  //    when base_freq is larger than max_freq, or fast slew is active), use the
-  //    maximum timeout and try again on the next update. */
-  // if (fabs(offset_register) < MIN_OFFSET_CORRECTION ||
-  //     offset_register * slew_freq <= 0.0) {
-  //   duration = MAX_SLEW_TIMEOUT;
-  // } else {
-  //   duration = offset_register / slew_freq;
-  //   if (duration < MIN_SLEW_TIMEOUT)
-  //     duration = MIN_SLEW_TIMEOUT;
-  //   else if (duration > MAX_SLEW_TIMEOUT)
-  //     duration = MAX_SLEW_TIMEOUT;
-  // }
+  /* Compute the duration of the slew and clamp it.  If the slewing frequency
+     is zero or has wrong sign (e.g. due to rounding in the frequency driver or
+     when base_freq is larger than max_freq, or fast slew is active), use the
+     maximum timeout and try again on the next update. */
+  if (fabs(offset_register) < MIN_OFFSET_CORRECTION ||
+      offset_register * slew_freq <= 0.0) {
+    duration = MAX_SLEW_TIMEOUT;
+  } else {
+    duration = offset_register / slew_freq;
+    if (duration < MIN_SLEW_TIMEOUT)
+      duration = MIN_SLEW_TIMEOUT;
+    else if (duration > MAX_SLEW_TIMEOUT)
+      duration = MAX_SLEW_TIMEOUT;
+  }
 
-  // /* Restart timer for the next update */
-  // UTI_AddDoubleToTimespec(&now, duration, &end_of_slew);
-  // slew_timeout_id = SCH_AddTimeout(&end_of_slew, handle_end_of_slew, NULL);
-  // slew_start = now;
+  /* Restart timer for the next update */
+  UTI_AddDoubleToTimespec(&now, duration, &end_of_slew);
+  slew_timeout_id = SCH_AddTimeout(&end_of_slew, handle_end_of_slew, NULL);
+  slew_start = now;
 
-  // DEBUG_LOG("slew offset=%e corr_rate=%e base_freq=%f total_freq=%f slew_freq=%e duration=%f slew_error=%e",
-  //     offset_register, correction_rate, base_freq, total_freq, slew_freq,
-  //     duration, slew_error);
+  DEBUG_LOG("slew offset=%e corr_rate=%e base_freq=%f total_freq=%f slew_freq=%e duration=%f slew_error=%e",
+      offset_register, correction_rate, base_freq, total_freq, slew_freq,
+      duration, slew_error);
+}
+
+/* ================================================== */
+
+static void
+handle_end_of_slew(void *anything)
+{
+  slew_timeout_id = 0;
+  update_slew();
 }
 
 /* ================================================== */
@@ -267,6 +346,7 @@ update_slew(void)
 static double
 set_frequency(double freq_ppm)
 {
+  LOG(LOGS_INFO, "genode_stub --> set_frequency");
   base_freq = freq_ppm;
   update_slew();
 
@@ -280,25 +360,26 @@ static void
 offset_convert(struct timespec *raw,
                double *corr, double *err)
 {
-  // double duration, fastslew_corr, fastslew_err;
+  LOG(LOGS_INFO, "genode_stub --> offset_convert");
+  double duration, fastslew_corr, fastslew_err;
 
-  // duration = UTI_DiffTimespecsToDouble(raw, &slew_start);
+  duration = UTI_DiffTimespecsToDouble(raw, &slew_start);
 
-  // if (drv_get_offset_correction && fastslew_active) {
-  //   drv_get_offset_correction(raw, &fastslew_corr, &fastslew_err);
-  //   if (fastslew_corr == 0.0 && fastslew_err == 0.0)
-  //     fastslew_active = 0;
-  // } else {
-  //   fastslew_corr = fastslew_err = 0.0;
-  // }
+  if (drv_get_offset_correction && fastslew_active) {
+    drv_get_offset_correction(raw, &fastslew_corr, &fastslew_err);
+    if (fastslew_corr == 0.0 && fastslew_err == 0.0)
+      fastslew_active = 0;
+  } else {
+    fastslew_corr = fastslew_err = 0.0;
+  }
 
-  // *corr = slew_freq * duration + fastslew_corr - offset_register;
+  *corr = slew_freq * duration + fastslew_corr - offset_register;
 
-  // if (err) {
-  //   *err = fastslew_err;
-  //   if (fabs(duration) <= max_freq_change_delay)
-  //     *err += slew_error;
-  // }
+  if (err) {
+    *err = fastslew_err;
+    if (fabs(duration) <= max_freq_change_delay)
+      *err += slew_error;
+  }
 }
 
 /* ================================================== */
@@ -306,6 +387,7 @@ offset_convert(struct timespec *raw,
 static void
 set_sync_status(int synchronised, double est_error, double max_error)
 {
+  LOG(LOGS_INFO, "genode_stub --> set_sync_status");
   double offset;
 
   offset = fabs(offset_register);
@@ -320,6 +402,7 @@ set_sync_status(int synchronised, double est_error, double max_error)
 void
 SYS_NetBSD_Initialise(void)
 {
+  LOG(LOGS_INFO, "genode_stub --> SYS_NetBSD_Initialise");
   SYS_Timex_InitialiseWithFunctions(MAX_FREQ, 1.0 / MIN_TICK_RATE,
                                     NULL, NULL, apply_step_offset,
                                     MIN_FASTSLEW_OFFSET, MAX_ADJTIME_SLEWRATE,
@@ -343,6 +426,7 @@ SYS_Generic_CompleteFreqDriver(double max_set_freq_ppm, double max_set_freq_dela
                                lcl_SetLeapDriver sys_set_leap,
                                lcl_SetSyncStatusDriver sys_set_sync_status)
 {
+  LOG(LOGS_INFO, "genode_stub --> SYS_Generic_CompleteFreqDriver");
   max_freq = max_set_freq_ppm;
   max_freq_change_delay = max_set_freq_delay * (1.0 + max_freq / 1.0e6);
   drv_read_freq = sys_read_freq;
@@ -370,8 +454,118 @@ SYS_Generic_CompleteFreqDriver(double max_set_freq_ppm, double max_set_freq_dela
   LCL_AddParameterChangeHandler(handle_step, NULL);
 }
 
-int ntp_adjtime(struct timex *time)
+//extern "C" __attribute__((weak))
+void settime(time_t time)
+{
+  LOG(LOGS_INFO, "time: %ld", time);
+  set_time_via_helper(&_set_time_helper, time);
+}
+
+void set_time_correction(long long correction)
+{
+  // get current time
+  struct timespec ts;
+
+  if( clock_gettime( CLOCK_REALTIME, &ts) == -1 ) {
+    LOG(LOGS_ERR, "clock_gettime failed" );
+    return;
+  }
+  LOG(LOGS_INFO, "ts.tv_sec: %ld, tv_nsec: %ld, correction: %lld", ts.tv_sec, ts.tv_nsec, correction);
+  // add correction
+  time_t time = ts.tv_sec + (time_t)(((ts.tv_nsec / 1000LL) + correction) / 1000000LL);
+  LOG(LOGS_INFO, "time: %ld", time);
+  // set time
+  settime(time);
+}
+
+int ntp_adjtime(struct timex *txc)
 {
   LOG(LOGS_INFO, "genode_stub --> ntp_adjtime");
+  if((txc->modes | MOD_STATUS) > 0)
+  {
+    LOG(LOGS_INFO, "MOD_STATUS ! -> nop, return 0");
+    return 0;
+  }
+//  extern long long current_correction_usecs(void);
+//  extern void set_time_correction(long long, int, int);
+
+  long long big_sec, big_usec, new_correction = 0LL;
+  //long long prev_correction;
+
+  // if (delta != NULL) {
+  //   /* Adjustment required.  Convert delta to 64-bit microseconds. */
+  //   big_sec = (long)delta->tv_sec;
+  //   big_usec = delta->tv_usec;
+  //   new_correction = (big_sec * 1000000LL) + big_usec;
+  // }
+
+  /* Determine how much of a previous correction (if any) we're interrupting. */
+  // prev_correction = current_correction_usecs();
+
+
+//  if (delta != NULL) {
+  if((txc->modes | MOD_OFFSET) > 0) {
+    /* Adjustment required. */
+
+    /* Immediately jump the PDC time to the new value, and then initiate a 
+      gradual MPE time correction slew. */
+    set_time_correction(txc->offset);
+  }
+
+//   if (olddelta != NULL) {
+//     /* Caller wants to know remaining amount of previous correction. */
+// //    (long)olddelta->tv_sec = prev_correction / 1000000LL;
+// //    olddelta->tv_usec = prev_correction % 1000000LL;
+//     olddelta->tv_sec = 0LL;
+//     olddelta->tv_usec = 0LL;
+//   }
+  return 0;
+}
+
+int adjtime(const struct timeval *delta, struct timeval *olddelta)
+{
+  LOG(LOGS_INFO, "genode_stub --> adjtime");
+
+//  extern long long current_correction_usecs(void);
+//  extern void set_time_correction(long long, int, int);
+
+  long long big_sec, big_usec, new_correction = 0LL;
+  //long long prev_correction;
+
+  if (delta != NULL) {
+    /* Adjustment required.  Convert delta to 64-bit microseconds. */
+    big_sec = (long)delta->tv_sec;
+    big_usec = delta->tv_usec;
+    new_correction = (big_sec * 1000000LL) + big_usec;
+  }
+
+  /* Determine how much of a previous correction (if any) we're interrupting. */
+  // prev_correction = current_correction_usecs();
+
+
+  if (delta != NULL) {
+    /* Adjustment required. */
+
+    /* Immediately jump the PDC time to the new value, and then initiate a 
+      gradual MPE time correction slew. */
+    set_time_correction(new_correction);
+  }
+
+  if (olddelta != NULL) {
+    /* Caller wants to know remaining amount of previous correction. */
+//    (long)olddelta->tv_sec = prev_correction / 1000000LL;
+//    olddelta->tv_usec = prev_correction % 1000000LL;
+    olddelta->tv_sec = 0LL;
+    olddelta->tv_usec = 0LL;
+  }
+  return 0;
+}
+
+int settimeofday(const struct timeval *tv, const struct timezone *tz)
+{
+  time_t time = tv->tv_sec;
+ 
+  settime(time);
+
   return 0;
 }

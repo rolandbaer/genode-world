@@ -21,6 +21,7 @@ set packages "
 	[depot_user]/src/vfs
 	[depot_user]/src/vfs_pipe
 	[depot_user]/src/vfs_jitterentropy
+	[depot_user]/pkg/system_rtc-[board]
 "
 
 # [depot_user]/src/libc
@@ -35,11 +36,15 @@ proc rtc_drv { } {
         }
 }
 
-append packages [depot_user]/src/[rtc_drv]
+#append packages [depot_user]/src/[rtc_drv]
 
 import_from_depot $packages
 
-build { test/libc app/chrony }
+set build_components {
+	test/libc app/chrony drivers/rtc/spec/x86
+}
+
+build $build_components
 
 #
 # Generate config
@@ -84,11 +89,24 @@ set config {
 		</route>
 	</start> }
 append config {
-    <start name="rtc_drv" ld="} [expr [have_board linux] ? "no" : "yes"] {">
+	<start name="report_rom">
+		<resource name="RAM" quantum="1M"/>
+		<provides> <service name="Report"/> <service name="ROM"/> </provides>
+		<config verbose="yes">
+			<policy label_suffix="set_rtc" report="chrony_daemon -> set_rtc"/>
+		</config>
+	</start>
+	<start name="rtc_drv" ld="} [expr [have_board linux] ? "no" : "yes"] {">
         <resource name="RAM" quantum="1M"/>
         <binary name="} [rtc_drv] {"/>
+		<config verbose="yes" allow_setting_rtc="yes" />
         <provides> <service name="Rtc"/> </provides>
-    </start> }
+		<route>
+			<service name="Timer"> <child name="timer"/> </service>
+			<service name="ROM" label="set_rtc"> <child name="report_rom"/> </service>
+			<any-service> <parent /> </any-service>
+		</route>
+    </start>}
 
 append config {
 	<start name="nic_router" caps="120">
@@ -122,13 +140,25 @@ append config {
 							 dns_config_from="uplink"/>
 			</domain>
 		</config>
-	</start> }
+	</start> 
+	<start name="system_rtc">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Rtc"/></provides>
+		<config verbose="yes" allow_setting_rtc="true"/>
+		<route>
+			<service name="ROM" label="set_rtc"> <child name="report_rom"/> </service>
+			<service name="Timer"> <child name="timer"/> </service>
+			<service name="Rtc"> <child name="rtc_drv"/> </service>
+			<any-service> <parent/> </any-service>
+		</route>
+	</start>
+}
 
 append config {
 	<start name="chrony_daemon" caps="320" priority="-1">
 		<binary name="chronyd"/>
 		<resource name="RAM" quantum="64M"/>
-		<config verbose="yes">
+		<config ld_verbose="yes" verbose="yes">
 			<env key="GNUTLS_DEBUG_LEVEL" value="10" />
 			<arg value="chronyd"/>
 			<arg value="-d"/>
@@ -209,7 +239,9 @@ emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 		</config>
 		<route>
 			<service name="Nic"> <child name="nic_router"/> </service>
-			<service name="Rtc"> <child name="rtc_drv"/> </service>
+			<service name="Timer"> <child name="timer"/> </service>
+			<service name="Rtc"> <child name="system_rtc"/> </service>
+<!--			<service name="Rtc"> <child name="rtc_drv"/> </service> -->
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
@@ -218,7 +250,7 @@ emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 
 install_config $config
 
-build_boot_image { chronyd stdcxx.lib.so gmp.lib.so nettle.lib.so gnutls.lib.so libc.lib.so libm.lib.so}
+build_boot_image { chronyd stdcxx.lib.so gmp.lib.so nettle.lib.so gnutls.lib.so libc.lib.so libm.lib.so rtc_drv}
 
 #
 # Execute test case
@@ -230,26 +262,14 @@ append qemu_args "  -nographic "
 
 append_qemu_nic_args "hostfwd=tcp::12865-:12865,hostfwd=tcp::49153-:49153"
 
-#if {[have_board linux]} {
-#	run_genode_until {.*TCP window size.*\n} 60
-#} else {
-#	run_genode_until {dummy} 60
-#}
+# if {[have_include "power_on/qemu"]} {
+# 	set ip_addr "localhost"
+# 	set force_ports "-p 49153"
+# } elseif [have_board linux] {
+# 	set ip_addr $lx_ip_addr
+# } else {
+# 	regexp $ip_match_string $output all ip_addr
+# 	puts ""
+# }
 
-#set serial_id [output_spawn_id]
-
-if {[have_include "power_on/qemu"]} {
-	set ip_addr "localhost"
-	set force_ports "-p 49153"
-} elseif [have_board linux] {
-	set ip_addr $lx_ip_addr
-} else {
-	regexp $ip_match_string $output all ip_addr
-	puts ""
-}
-
-# give the TCP/IP stack some time to settle down
-sleep 3
-
-#run_genode_until "aaaa.*aaaa" 1600 $spawn_id_list
-run_genode_until "child \"chrony_daemon\" exited" 900
+run_genode_until "init -> rtc_drv] set time to" 900
