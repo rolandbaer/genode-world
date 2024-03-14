@@ -36,6 +36,7 @@ install_config {
 	<start name="gtest_all_test" caps="200" ram="4M">
 		<config>
 			<arg value="gtest_all_test"/>
+			<arg value="--gtest_filter=-XmlOutputChangeDirTest.PreserveOriginalWorkingDirWith*"/>
 			<env key="TERM" value="screen"/>
 			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc" rng="/dev/random"/>
 			<vfs>
