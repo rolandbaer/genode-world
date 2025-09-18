@@ -1,4 +1,11 @@
 TARGET = test-mbedtls
-LIBS   = mbedtls
+LIBS   = mbedtls posix libc
 
-CC_CXX_WARN_STRICT =
+MBEDTLS := $(call select_from_ports,mbedtls)/src/lib/mbedtls
+
+INC_DIR = $(MBEDTLS)/tests/include $(MBEDTLS)/library
+
+SRC_C = ssl_client1.c certs.c
+
+vpath certs.c $(MBEDTLS)/tests/src
+
