@@ -8,7 +8,7 @@ DOWNLOADS := grafx2.archive
 # cumbersome - I went ahead and mirrored the archive.
 #
 
-URL(grafx2) := http://usr.sysret.de/jws/grafx2-$(VERSION)-src.tgz
+URL(grafx2) := https://distfiles.sysret.de/Genode/grafx2-$(VERSION)-src.tgz
 SHA(grafx2) := 5818caea63cd3cf3318baf01dd20f81ec61e4514443000c80a41b68ab3f17a6b
 DIR(grafx2) := src/app/grafx2
 
